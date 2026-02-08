@@ -243,6 +243,17 @@ def _curl_check(url, method, headers, data=None):
             pass
 
 
+def _looks_like_datasette_requirement(req):
+    req = (req or "").strip().lower()
+    if not req.startswith("datasette"):
+        return False
+    if req == "datasette":
+        return True
+    # datasette==0.65.2, datasette>=..., datasette[extra]==..., etc.
+    next_ch = req[len("datasette") : len("datasette") + 1]
+    return next_ch in ("=", "<", ">", "!", "~", "[", " ")
+
+
 def _trigger_dokploy(dokploy_url, application_id, api_key):
     url = dokploy_url.rstrip("/") + "/api/application.deploy"
     payload = json.dumps({"applicationId": application_id})
@@ -349,13 +360,25 @@ def _publish(
             )
         )
 
-        datasette_install = "datasette"
-        if branch:
+        install = list(install)
+        datasette_from_install = next(
+            (req for req in install if _looks_like_datasette_requirement(req)), None
+        )
+        if datasette_from_install and branch:
+            raise click.ClickException(
+                "Cannot use --branch and --install datasette... at the same time"
+            )
+
+        datasette_install = datasette_from_install or "datasette"
+        if branch and not datasette_from_install:
             datasette_install = (
                 "https://github.com/simonw/datasette/archive/{}.zip".format(branch)
             )
+        if datasette_from_install:
+            install = [req for req in install if not _looks_like_datasette_requirement(req)]
+
         open("requirements.txt", "w").write(
-            "\n".join([datasette_install, "pysqlite3-binary", "uvicorn"] + list(install))
+            "\n".join([datasette_install, "pysqlite3-binary", "uvicorn"] + install)
         )
 
         if generate_dir:

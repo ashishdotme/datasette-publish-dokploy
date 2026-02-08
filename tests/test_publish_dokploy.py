@@ -27,6 +27,30 @@ def test_publish_dokploy_generate_dir(mock_which):
 
 
 @mock.patch("shutil.which")
+def test_publish_dokploy_pins_datasette_if_specified(mock_which):
+    mock_which.return_value = True
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        open("test.db", "w").write("data")
+        result = runner.invoke(
+            cli.cli,
+            [
+                "publish",
+                "dokploy",
+                "test.db",
+                "--install",
+                "datasette==0.65.2",
+                "--generate-dir",
+                "app",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        reqs = open("app/requirements.txt").read().splitlines()
+        assert reqs[0] == "datasette==0.65.2"
+        assert "datasette" not in reqs[1:]
+
+
+@mock.patch("shutil.which")
 def test_publish_dokploy_generate_workflow(mock_which):
     mock_which.return_value = True
     runner = CliRunner()
